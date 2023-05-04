@@ -88,6 +88,7 @@ sub _capture_imunify_features {
     if ( -f IMUNIFY_LICENSE_FILE ) {
         File::Copy::move( IMUNIFY_LICENSE_FILE, IMUNIFY_LICENSE_BACKUP );
     }
+    INFO("Found Imunify reatures: " . join(" ", @features));
 
     cpev::update_stage_file( { 'reinstall' => { 'imunify_features' => \@features } } );
 
