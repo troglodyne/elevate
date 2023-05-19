@@ -35,7 +35,17 @@ sub _warning_if_postgresql_installed ($self) {
     return 1 if !$old_version || $old_version >= 10;
 
     my $pretty_distro_name = $self->upgrade_to_pretty_name();
-    WARN("You have postgresql-server version $old_version installed. This will be upgraded irreversibly to version 10.0 when you switch to $pretty_distro_name");
+    my $MSG = <<"MSG";
+You have postgresql-server version $old_version installed.
+This will be upgraded irreversibly to version 10.0 when you switch to $pretty_distro_name.
+We recommend data backup and removal of all postgresql packages before upgrading
+to $pretty_distro_name with the exception of the cpanel-postgresql packages.
+The cpanel-postgresql packages do not relate to the postgresql-server package.
+
+To re-install postgresql 9 on AlmaLinux 8, you can run:
+`dnf -y module enable postgresql:9.6; dnf -y install postgresql-server`
+MSG
+    WARN($msg);
 
     return 2;
 }
