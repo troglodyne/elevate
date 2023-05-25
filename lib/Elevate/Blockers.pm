@@ -65,6 +65,7 @@ our @BLOCKERS = qw{
   BootKernel
   Grub2
   OVH
+  Linode
   Python
   AbsoluteSymlinks
 };
