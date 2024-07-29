@@ -62,6 +62,7 @@ use constant vetted_yum_repo => (
     'kernelcare',
     'updates',
     qr/^wp-toolkit-(?:cpanel|thirdparties)$/,
+    qr/^centos-sclo-/,
   ),
   vetted_mysql_yum_repo_ids;
 

@@ -255,6 +255,7 @@ use Elevate::Blockers::MountPoints      ();
 use Elevate::Blockers::NICs             ();
 use Elevate::Blockers::OVH              ();    # using a constant
 use Elevate::Blockers::Repositories     ();    # using a constant
+use Elevate::Blockers::SCL              ();
 use Elevate::Blockers::SSH              ();
 use Elevate::Blockers::WHM              ();
 use Elevate::Blockers::Leapp            ();
@@ -284,6 +285,7 @@ use Elevate::Components::Repositories       ();
 use Elevate::Components::RpmDB              ();
 use Elevate::Components::RmMod              ();
 use Elevate::Components::WPToolkit          ();
+use Elevate::Components::SCL                ();
 use Elevate::Components::SSH                ();
 use Elevate::Components::AutoSSL            ();
 use Elevate::Components::DatabaseUpgrade    ();
@@ -968,6 +970,7 @@ sub run_stage_2 ($self) {
     # This disable cPanel services
     $self->run_component_once( 'cPanelPrep' => 'pre_leapp' );
 
+    $self->run_component_once( 'SCL'        => 'pre_leapp' );
     $self->run_component_once( 'SSH'        => 'pre_leapp' );
     $self->run_component_once( 'AutoSSL'    => 'pre_leapp' );
     $self->run_component_once( 'KernelCare' => 'pre_leapp' );
@@ -1132,6 +1135,7 @@ sub run_stage_4 ($self) {
     );
 
     $self->run_component_once( 'CCS' => 'post_leapp' );
+    $self->run_component_once( 'SCL' => 'post_leapp' );
 
     return ACTION_REBOOT_NEEDED;
 }

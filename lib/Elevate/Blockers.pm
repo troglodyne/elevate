@@ -33,6 +33,7 @@ use Elevate::Blockers::MountPoints      ();
 use Elevate::Blockers::NICs             ();
 use Elevate::Blockers::OVH              ();
 use Elevate::Blockers::ElevateScript    ();
+use Elevate::Blockers::SCL              ();
 use Elevate::Blockers::SSH              ();
 use Elevate::Blockers::WHM              ();
 use Elevate::Blockers::Repositories     ();
@@ -65,6 +66,7 @@ our @BLOCKERS = qw{
 
   Databases
   Repositories
+  SCL
   JetBackup
   NICs
   EA4

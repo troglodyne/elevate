@@ -31,6 +31,7 @@ BEGIN {    # Suppress load of all of these at earliest point.
     $INC{'Elevate/Blockers/NICs.pm'}                 = 'script/elevate-cpanel.PL.static';
     $INC{'Elevate/Blockers/OVH.pm'}                  = 'script/elevate-cpanel.PL.static';
     $INC{'Elevate/Blockers/Repositories.pm'}         = 'script/elevate-cpanel.PL.static';
+    $INC{'Elevate/Blockers/SCL.pm'}                  = 'script/elevate-cpanel.PL.static';
     $INC{'Elevate/Blockers/SSH.pm'}                  = 'script/elevate-cpanel.PL.static';
     $INC{'Elevate/Blockers/WHM.pm'}                  = 'script/elevate-cpanel.PL.static';
     $INC{'Elevate/Blockers/Leapp.pm'}                = 'script/elevate-cpanel.PL.static';
@@ -58,6 +59,7 @@ BEGIN {    # Suppress load of all of these at earliest point.
     $INC{'Elevate/Components/RpmDB.pm'}              = 'script/elevate-cpanel.PL.static';
     $INC{'Elevate/Components/RmMod.pm'}              = 'script/elevate-cpanel.PL.static';
     $INC{'Elevate/Components/WPToolkit.pm'}          = 'script/elevate-cpanel.PL.static';
+    $INC{'Elevate/Components/SCL.pm'}                = 'script/elevate-cpanel.PL.static';
     $INC{'Elevate/Components/SSH.pm'}                = 'script/elevate-cpanel.PL.static';
     $INC{'Elevate/Components/AutoSSL.pm'}            = 'script/elevate-cpanel.PL.static';
     $INC{'Elevate/Components/DatabaseUpgrade.pm'}    = 'script/elevate-cpanel.PL.static';
@@ -260,6 +262,7 @@ BEGIN {    # Suppress load of all of these at earliest point.
     use Elevate::Blockers::NICs             ();
     use Elevate::Blockers::OVH              ();
     use Elevate::Blockers::ElevateScript    ();
+    use Elevate::Blockers::SCL              ();
     use Elevate::Blockers::SSH              ();
     use Elevate::Blockers::WHM              ();
     use Elevate::Blockers::Repositories     ();
@@ -291,6 +294,7 @@ BEGIN {    # Suppress load of all of these at earliest point.
 
       Databases
       Repositories
+      SCL
       JetBackup
       NICs
       EA4
@@ -2289,6 +2293,74 @@ EOS
     1;
 
 }    # --- END lib/Elevate/Blockers/Repositories.pm
+
+{    # --- BEGIN lib/Elevate/Blockers/SCL.pm
+
+    package Elevate::Blockers::SCL;
+
+    use cPstrict;
+
+    use Cpanel::Pkgr       ();
+    use Elevate::StageFile ();
+
+    # use Elevate::Blockers::Base();
+    our @ISA;
+    BEGIN { push @ISA, qw(Elevate::Blockers::Base); }
+
+    sub check ($self) {
+        return 0 unless grep { Cpanel::Pkgr::is_installed($_) } qw{centos-release-scl centos-release-scl-rh};
+        my %pkgs2check4repo = map { $_ => [ cpev::get_installed_rpms_in_repo($_) ]; } qw{
+          centos-sclo-rh
+          centos-sclo-rh-testing
+          centos-sclo-rh-source
+          centos-sclo-rh-debuginfo
+          centos-sclo-sclo
+          centos-sclo-sclo-testing
+          centos-sclo-sclo-source
+          centos-sclo-sclo-debuginfo
+        };
+        my %pkgs_by_action = (
+            'blocked' => [],
+            'saved'   => [],
+        );
+        foreach my $repo ( keys %pkgs2check4repo ) {
+            foreach my $pkg ( @{ $pkgs2check4repo{$repo} } ) {
+                my $action = ( $pkg =~ m/(mongodb|mariadb|mysql|varnish).+/ ) ? 'blocked' : 'saved';
+                push @{ $pkgs_by_action{$action} }, [ $pkg, $repo ];
+            }
+        }
+        if ( @{ $pkgs_by_action{'blocked'} } ) {
+            my $message = <<~'EOS';
+        The following packages from the CentOS SCLo Repositories are known to cause
+        issues with ELevation. Please remove the following packages before continuing
+        with the Elevate process:
+
+        Package                                                              Repository
+        -------                                                              ----------
+        EOS
+
+            $message .= _purty_print_repo_line( @{$_} ) for @{ $pkgs_by_action{'blocked'} };
+
+            return $self->has_blocker($message);
+        }
+
+        Elevate::StageFile::update_stage_file(
+            { scl_packages => [ map { $_->[0] } @{ $pkgs_by_action{'saved'} } ] },
+        );
+
+        return 0;
+    }
+
+    sub _purty_print_repo_line ( $pkg, $repo ) {
+        die "Bad caller" if !$pkg || !$repo;
+        my $spaces = ( 72 - ( length($pkg) + length($repo) ) );
+        $spaces = 1 if !$spaces || abs($spaces) ne $spaces;
+        return ' ' x 4 . $pkg . ' ' x $spaces . "\@${repo}" . ' ' x 4 . "\n";
+    }
+
+    1;
+
+}    # --- END lib/Elevate/Blockers/SCL.pm
 
 {    # --- BEGIN lib/Elevate/Blockers/SSH.pm
 
@@ -5352,6 +5424,43 @@ EOS
 
 }    # --- END lib/Elevate/Components/WPToolkit.pm
 
+{    # --- BEGIN lib/Elevate/Components/SCL.pm
+
+    package Elevate::Components::SCL;
+
+    use cPstrict;
+
+    # use Log::Log4perl qw(:easy);
+    INIT { Log::Log4perl->import(qw{:easy}); }
+
+    # use Elevate::Components::Base();
+    our @ISA;
+    BEGIN { push @ISA, qw(Elevate::Components::Base); }
+
+    sub pre_leapp ($self) {
+        my $pkgs2remove = Elevate::StageFile::read_stage_file('scl_packages');
+        $self->cpev->ssystem( qw{rpm -e}, @$pkgs2remove ) and do {
+
+            Elevate::StageFile::remove_from_stage_file('scl_packages');
+            die "Failed to remove SCL packages; rpm exited nonzero ($?). Manual cleanup may be necessary before re-running ELevate.";
+        };
+
+        return;
+    }
+
+    sub post_leapp ($self) {
+        my $pkgs2reinstall = Elevate::StageFile::read_stage_file('scl_packages');
+
+        $self->cpev->ssystem( qw{yum -y install}, @$pkgs2reinstall )
+          and WARN("Failed to reinstall SCL packages; yum exited nonzero ($?). Manual cleanup may be necessary.");
+
+        return;
+    }
+
+    1;
+
+}    # --- END lib/Elevate/Components/SCL.pm
+
 {    # --- BEGIN lib/Elevate/Components/SSH.pm
 
     package Elevate::Components::SSH;
@@ -5787,6 +5896,7 @@ EOS
         'kernelcare',
         'updates',
         qr/^wp-toolkit-(?:cpanel|thirdparties)$/,
+        qr/^centos-sclo-/,
       ),
       vetted_mysql_yum_repo_ids;
 
@@ -7985,6 +8095,7 @@ use Elevate::Blockers::MountPoints      ();
 use Elevate::Blockers::NICs             ();
 use Elevate::Blockers::OVH              ();    # using a constant
 use Elevate::Blockers::Repositories     ();    # using a constant
+use Elevate::Blockers::SCL              ();
 use Elevate::Blockers::SSH              ();
 use Elevate::Blockers::WHM              ();
 use Elevate::Blockers::Leapp            ();
@@ -8014,6 +8125,7 @@ use Elevate::Components::Repositories       ();
 use Elevate::Components::RpmDB              ();
 use Elevate::Components::RmMod              ();
 use Elevate::Components::WPToolkit          ();
+use Elevate::Components::SCL                ();
 use Elevate::Components::SSH                ();
 use Elevate::Components::AutoSSL            ();
 use Elevate::Components::DatabaseUpgrade    ();
@@ -8698,6 +8810,7 @@ sub run_stage_2 ($self) {
     # This disable cPanel services
     $self->run_component_once( 'cPanelPrep' => 'pre_leapp' );
 
+    $self->run_component_once( 'SCL'        => 'pre_leapp' );
     $self->run_component_once( 'SSH'        => 'pre_leapp' );
     $self->run_component_once( 'AutoSSL'    => 'pre_leapp' );
     $self->run_component_once( 'KernelCare' => 'pre_leapp' );
@@ -8862,6 +8975,7 @@ sub run_stage_4 ($self) {
     );
 
     $self->run_component_once( 'CCS' => 'post_leapp' );
+    $self->run_component_once( 'SCL' => 'post_leapp' );
 
     return ACTION_REBOOT_NEEDED;
 }
