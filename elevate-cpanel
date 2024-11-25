@@ -3108,22 +3108,12 @@ EOS
 
     sub check ($self) {
 
-        $self->_blocker_jetbackup_is_supported();
         $self->_blocker_old_jetbackup;
 
         return;
     }
 
-    sub _blocker_jetbackup_is_supported ($self) {
-        return unless Cpanel::Pkgr::is_installed('jetbackup');
-        return if Elevate::OS::supports_jetbackup();
-
-        my $name = Elevate::OS::default_upgrade_to();
-        return $self->has_blocker( <<~"END" );
-    ELevate does not currently support JetBackup for upgrades of $name.
-    Support for JetBackup on $name will be added in a future version of ELevate.
-    END
-    }
+    sub _blocker_jetbackup_is_supported { return undef }
 
     sub _blocker_old_jetbackup ($self) {
 
@@ -7217,6 +7207,8 @@ deb-src https://repo.mysql.com/apt/ubuntu/ jammy mysql-8.0},
 deb https://wp-toolkit.plesk.com/cPanel/Ubuntu-22.04-x86_64/latest/wp-toolkit/ ./
 
 deb https://wp-toolkit.plesk.com/cPanel/Ubuntu-22.04-x86_64/latest/thirdparty/ ./},
+
+        map { my $thing = $_; "jetapps-$_.list" => "deb [arch=amd64] https://repo.jetlicense.com/ubuntu jammy/$_ main" } qw{base plugins alpha beta edge rc release stable},
     };
 
     use constant supported_cpanel_mysql_versions => qw{
