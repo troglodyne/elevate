@@ -7389,9 +7389,12 @@ deb https://wp-toolkit.plesk.com/cPanel/Ubuntu-22.04-x86_64/latest/thirdparty/ .
 
     use cPstrict;
 
-    use File::Copy ();
+    use File::Copy    ();
+    use File::Slurper ();
 
     use Elevate::OS ();
+
+    use Cpanel::Pkgr ();
 
     # use Log::Log4perl qw(:easy);
     INIT { Log::Log4perl->import(qw{:easy}); }
@@ -7563,6 +7566,35 @@ deb https://wp-toolkit.plesk.com/cPanel/Ubuntu-22.04-x86_64/latest/thirdparty/ .
 
     sub remove_pkgs_from_repos ( $self, @pkg_list ) {
         return;
+    }
+
+    my %repo2filepart = (
+        map { my $dollar_underscore = $_; "jetapps-$dollar_underscore" => "repo.jetlicense.com_ubuntu_dists_jammy_$dollar_underscore" } qw{base plugins alpha beta edge rc release stable},
+    );
+
+    sub get_installed_pkgs_in_repo ( $self, @repos ) {
+        return unless scalar @repos;
+
+        my $dir2read = '/var/lib/apt/lists';
+        opendir( my $dh, $dir2read ) or die "Can't open $dir2read: $!";
+        my @pkglists = grep { m/_Packages$/ } readdir($dh);
+        closedir($dh);
+        $repos[0] = 'jetapps-base' if $repos[0] eq 'jetapps';
+        my @installed;
+        foreach my $repo (@repos) {
+            my $filepart = $repo2filepart{$repo};
+            foreach my $pkglist (@pkglists) {
+                if ( $pkglist =~ qr/^$filepart/ ) {
+                    my @lines = File::Slurper::read_lines("$dir2read/$pkglist");
+
+                    my %pkgs = map { substr( $_, 9 ) => 1 } grep { m/^Package: / } @lines;
+                    push @installed, sort grep { Cpanel::Pkgr::is_installed($_) } keys %pkgs;
+                    last;
+                }
+            }
+        }
+
+        return @installed;
     }
 
     1;
