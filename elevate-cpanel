@@ -7575,6 +7575,9 @@ deb https://wp-toolkit.plesk.com/cPanel/Ubuntu-22.04-x86_64/latest/thirdparty/ .
     sub get_installed_pkgs_in_repo ( $self, @repos ) {
         return unless scalar @repos;
 
+        my @apt_args = (APT_NON_INTERACTIVE_ARGS);
+        $self->ssystem_and_die( $apt, @apt_args, 'update' );
+
         my $dir2read = '/var/lib/apt/lists';
         opendir( my $dh, $dir2read ) or die "Can't open $dir2read: $!";
         my @pkglists = grep { m/_Packages$/ } readdir($dh);
