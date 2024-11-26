@@ -281,12 +281,20 @@ this right now (I'd rather fix Cpanel::RepoQuery).
 #
 # This works fine where we use it (cpanel-plugins) but isn't yet updated to be
 # more generic.
+#
+# Also, excuse the tedious var naming. It's a syntax error to just use $_ here.
 my %repo2filepart = (
     map { my $dollar_underscore = $_; "jetapps-$dollar_underscore" => "repo.jetlicense.com_ubuntu_dists_jammy_$dollar_underscore" } qw{base plugins alpha beta edge rc release stable},
 );
 
 sub get_installed_pkgs_in_repo ( $self, @repos ) {
     return unless scalar @repos;
+
+    # Forcibly update (not upgrade) apt so that you have the list on disk
+    # XXX This could mean a lot of apt update invocations. May want an extra
+    # caching layer here at some point if it becomes a problem.
+    my @apt_args = (APT_NON_INTERACTIVE_ARGS);
+    $self->ssystem_and_die( $apt, @apt_args, 'update' );
 
     my $dir2read = '/var/lib/apt/lists';
     opendir( my $dh, $dir2read ) or die "Can't open $dir2read: $!";
